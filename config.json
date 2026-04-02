@@ -1,0 +1,37 @@
+{
+    "ollama": {
+        "base_url": "http://localhost:11435/v1",
+        "model": "gemma4:e4b-it-q8_0",
+        "temperature": 0.7,
+        "max_tokens": 8000
+    },
+    "podcast": {
+        "user_prompt_file": "./prompts/user_prompt.txt",
+        "planner_prompt_file": "./prompts/planner_prompt.txt",
+        "supervisor_prompt_file": "./prompts/supervisor_prompt.txt",
+        "worker_prompt_file": "./prompts/worker_prompt.txt"
+    },
+    "biliup_config_default": {
+        "line": "kodo",
+        "limit": 3,
+        "streamers": {
+            "视频patterns1*": {
+                "copyright": 1,
+                "source": "转载来源",
+                "tid": 171,
+                "cover": "./cover.jpg",
+                "title": "标题",
+                "desc_format_id": 0,
+                "desc": "睡前故事",
+                "dynamic": "",
+                "subtitle": {
+                    "open": 0,
+                    "lan": ""
+                },
+                "tag": "",
+                "dtime": null,
+                "open_subtitle": false
+            }
+        }
+    }
+}
