@@ -8,11 +8,14 @@ import re
 import shutil
 import subprocess
 import sys
+import time
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 
 try:
-    from rich.console import Console
+    from rich.console import Console, Group
+    from rich.live import Live
     from rich.panel import Panel
     from rich.progress import (
         BarColumn,
@@ -35,11 +38,16 @@ class WorkflowRunner:
         self.python_bin = args.python_bin
         self.state_dir = Path(".workflow_state")
 
-    def run_cmd_live(self, cmd, step_id, progress, task_id, cwd=None):
+    def run_cmd_live(
+        self, cmd, step_id, progress, task_id, log_queue, live_display, cwd=None
+    ):
         """
         Run a command and parse its stdout in real-time to update the Rich progress bar.
         This provides granular UI updates instead of just hanging at 0%.
         """
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+
         process = subprocess.Popen(
             cmd,
             cwd=cwd,
@@ -48,12 +56,24 @@ class WorkflowRunner:
             text=True,
             errors="replace",
             bufsize=1,
+            env=env,
         )
 
         output_log = []
         for line in iter(process.stdout.readline, ""):
             output_log.append(line)
             line_str = line.strip()
+
+            if line_str:
+                log_queue.append(line_str)
+                live_display.update(
+                    Group(
+                        progress,
+                        Panel(
+                            "\n".join(log_queue), title="Live Logs", border_style="blue"
+                        ),
+                    )
+                )
 
             # Real-time parsing based on step
             if step_id == "generate":
@@ -62,9 +82,13 @@ class WorkflowRunner:
                     progress.update(task_id, total=int(match.group(1)), completed=0)
                 elif "✓ Chapter completed" in line_str:
                     progress.advance(task_id)
+                elif "=== GENERATING DYNAMIC CHAPTERS ===" in line_str:
+                    progress.update(
+                        task_id, description="[yellow]AI Script Gen (Planning)"
+                    )
 
             elif step_id == "tts":
-                if "[DONE] Saved" in line_str:
+                if "[DONE] Saved" in line_str or "[SKIP]" in line_str:
                     progress.advance(task_id)
 
             elif step_id == "video":
@@ -129,9 +153,13 @@ class WorkflowRunner:
             with open(prompt_file, "w", encoding="utf-8") as f:
                 f.write(prompt_text)
 
-            # Each queue item is independent, so clear previous state markers
+            # Each queue item is independent, so clear previous state markers and outputs
             if self.state_dir.exists():
                 shutil.rmtree(self.state_dir)
+            if Path("clean_all.py").exists():
+                subprocess.run(
+                    [self.python_bin, "clean_all.py", "--yes"], capture_output=True
+                )
 
         self.state_dir.mkdir(exist_ok=True)
 
@@ -164,19 +192,28 @@ class WorkflowRunner:
             f"Queue [{prompt_idx}/{total_prompts}]" if total_prompts > 1 else "Pipeline"
         )
 
-        with Progress(
+        progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(bar_width=30),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TimeElapsedColumn(),
             console=console,
-            transient=False,
-        ) as progress:
-            overall_task = progress.add_task(
-                f"[bold cyan]{overall_title}", total=len(steps)
-            )
+        )
+        overall_task = progress.add_task(
+            f"[bold cyan]{overall_title}", total=len(steps)
+        )
 
+        log_queue = deque(maxlen=15)
+
+        with Live(
+            Group(
+                progress,
+                Panel("Waiting for logs...", title="Live Logs", border_style="blue"),
+            ),
+            console=console,
+            refresh_per_second=10,
+        ) as live_display:
             for step in steps:
                 step_id = step["id"]
                 step_name = step["name"]
@@ -204,6 +241,8 @@ class WorkflowRunner:
                             step_id,
                             progress,
                             step_task,
+                            log_queue,
+                            live_display,
                         )
                         output_log = out
                         if code == 0:
@@ -225,6 +264,8 @@ class WorkflowRunner:
                             step_id,
                             progress,
                             step_task,
+                            log_queue,
+                            live_display,
                         )
                         output_log = out
                         if code == 0:
@@ -255,7 +296,9 @@ class WorkflowRunner:
                         if self.args.overwrite:
                             cmd.append("--overwrite")
 
-                        code, out = self.run_cmd_live(cmd, step_id, progress, step_task)
+                        code, out = self.run_cmd_live(
+                            cmd, step_id, progress, step_task, log_queue, live_display
+                        )
                         output_log = out
                         if code == 0:
                             success = True
@@ -272,7 +315,9 @@ class WorkflowRunner:
                         ]
                         if self.args.reencode:
                             cmd.append("--reencode")
-                        code, out = self.run_cmd_live(cmd, step_id, progress, step_task)
+                        code, out = self.run_cmd_live(
+                            cmd, step_id, progress, step_task, log_queue, live_display
+                        )
                         output_log = out
                         if code == 0:
                             success = True
@@ -414,7 +459,12 @@ class WorkflowRunner:
                                 ]
 
                             code, out = self.run_cmd_live(
-                                cmd, step_id, progress, step_task
+                                cmd,
+                                step_id,
+                                progress,
+                                step_task,
+                                log_queue,
+                                live_display,
                             )
                             output_log = out
                             if code == 0:
@@ -429,7 +479,9 @@ class WorkflowRunner:
                         )  # Indeterminate for upload
                         if (current_run_dir / "biliup_config.yaml").exists():
                             biliup_bin = (
-                                "./biliup" if Path("./biliup").exists() else "biliup"
+                                str(Path("./biliup").resolve())
+                                if Path("./biliup").exists()
+                                else "biliup"
                             )
                             cookies_path = str(Path("cookies.json").resolve())
                             cmd = [
@@ -440,17 +492,51 @@ class WorkflowRunner:
                                 "-c",
                                 "biliup_config.yaml",
                             ]
-                            code, out = self.run_cmd_live(
-                                cmd,
-                                step_id,
-                                progress,
-                                step_task,
-                                cwd=str(current_run_dir),
-                            )
-                            output_log = out
-                            if code == 0:
-                                success = True
-                                upload_success = True
+
+                            max_wait = 24 * 3600  # 24 hours maximum total wait
+                            total_waited = 0
+                            retry_delay = 180  # Start with 3 minutes
+                            attempt = 1
+
+                            while True:
+                                code, out = self.run_cmd_live(
+                                    cmd,
+                                    step_id,
+                                    progress,
+                                    step_task,
+                                    log_queue,
+                                    live_display,
+                                    cwd=str(current_run_dir),
+                                )
+                                output_log = out
+                                if code == 0:
+                                    success = True
+                                    upload_success = True
+                                    break
+
+                                if total_waited + retry_delay <= max_wait:
+                                    msg = f"[WARN] Upload failed. Rate limited? Retrying in {retry_delay}s... (Attempt {attempt}, Waited {total_waited}s)"
+                                    log_queue.append(msg)
+                                    live_display.update(
+                                        Group(
+                                            progress,
+                                            Panel(
+                                                "\n".join(log_queue),
+                                                title="Live Logs",
+                                                border_style="blue",
+                                            ),
+                                        )
+                                    )
+                                    time.sleep(retry_delay)
+                                    total_waited += retry_delay
+                                    retry_delay = min(
+                                        retry_delay * 2, 3600
+                                    )  # Cap delay at 1 hour
+                                    attempt += 1
+                                else:
+                                    success = False
+                                    upload_success = False
+                                    break
                         else:
                             success = False
                             output_log = "Error: biliup_config.yaml not found."
@@ -463,6 +549,8 @@ class WorkflowRunner:
                                 step_id,
                                 progress,
                                 step_task,
+                                log_queue,
+                                live_display,
                             )
                             output_log = out
                             if code == 0:

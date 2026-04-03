@@ -2,6 +2,35 @@
 #
 # Projects/run_workflow.sh
 #
+# Wrapper script that delegates execution to the Python-based workflow_runner.py
+# which provides a rich UI, queue management, and handles the full PodWeaver pipeline.
+
+set -euo pipefail
+
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+# Ensure we run from the project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
+# Check if Python is available
+if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+  echo "Error: Python binary '${PYTHON_BIN}' not found." >&2
+  exit 1
+fi
+
+# Check if the 'rich' library is installed, which is required for the UI
+if ! "${PYTHON_BIN}" -c "import rich" 2>/dev/null; then
+  echo "Error: The 'rich' Python library is required for the UI." >&2
+  echo "Please install it by running: ${PYTHON_BIN} -m pip install rich" >&2
+  exit 1
+fi
+
+# Pass all incoming arguments to the Python runner
+exec "${PYTHON_BIN}" workflow_runner.py "$@"
+
+# --- LEGACY BASH SCRIPT BELOW (IGNORED DUE TO EXEC ABOVE) ---
+
 # Resumable pipeline runner with improved output layout:
 #   All outputs for a run are placed in: ./output/<YYYYMMDD_HHMMSS>/
 #     - merged.mp3
