@@ -287,6 +287,8 @@ def finalize_node(state: AgentState) -> AgentState:
 
         import copy
 
+        import yaml
+
         biliup_config = copy.deepcopy(SCRIPT_CONFIG.get("biliup", {}))
 
         if "streamers" in biliup_config:
@@ -300,10 +302,9 @@ def finalize_node(state: AgentState) -> AgentState:
                     streamer_config["desc"] = SCRIPT_CONFIG["desc"]
                 new_streamers["merged.mp4"] = streamer_config
             biliup_config["streamers"] = new_streamers
-        biliup_config_path = output_path.parent / "biliup_config.json"
-        biliup_config_path.write_text(
-            json.dumps(biliup_config, ensure_ascii=False, indent=4), encoding="utf-8"
-        )
+        biliup_config_path = output_path.parent / "biliup_config.yaml"
+        with open(biliup_config_path, "w", encoding="utf-8") as f:
+            yaml.dump(biliup_config, f, allow_unicode=True, sort_keys=False)
         print(f"✓ Biliup_config saved to: {biliup_config_path.resolve()}")
     except Exception as e:
         print(f"✗ Error saving script: {e}")

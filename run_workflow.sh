@@ -281,14 +281,14 @@ fi
 if [ -f "cover.jpg" ]; then
   cp -f "cover.jpg" "${RUN_DIR}/cover.jpg"
 fi
-# Copy original script.txt and biliup_config.json if present
+# Copy original script.txt and biliup_config.yaml if present
 LATEST_SCRIPT_DIR="$(ls -1td scripts/*/ 2>/dev/null | head -n 1 || true)"
 if [ -n "${LATEST_SCRIPT_DIR}" ]; then
   if [ -f "${LATEST_SCRIPT_DIR}script.txt" ]; then
     cp -f "${LATEST_SCRIPT_DIR}script.txt" "${RUN_DIR}/script.txt"
   fi
-  if [ -f "${LATEST_SCRIPT_DIR}biliup_config.json" ]; then
-    cp -f "${LATEST_SCRIPT_DIR}biliup_config.json" "${RUN_DIR}/biliup_config.json"
+  if [ -f "${LATEST_SCRIPT_DIR}biliup_config.yaml" ]; then
+    cp -f "${LATEST_SCRIPT_DIR}biliup_config.yaml" "${RUN_DIR}/biliup_config.yaml"
   fi
 elif [ -f "script.txt" ]; then
   cp -f "script.txt" "${RUN_DIR}/script.txt"
@@ -336,7 +336,7 @@ if [ -n "${SOURCE_MP3}" ] && [ -f "${SOURCE_MP3}" ]; then
 
     if [ "${UPLOAD}" -eq 1 ]; then
       echo "[workflow] Step: upload (biliup)"
-      if [ -f "${RUN_DIR}/biliup_config.json" ]; then
+      if [ -f "${RUN_DIR}/biliup_config.yaml" ]; then
         if [ -x "${SCRIPT_DIR}/biliup" ]; then
           BILIUP_CMD="${SCRIPT_DIR}/biliup"
         elif check_cmd biliup; then
@@ -348,7 +348,7 @@ if [ -n "${SOURCE_MP3}" ] && [ -f "${SOURCE_MP3}" ]; then
         if [ -n "${BILIUP_CMD}" ]; then
           echo "[workflow] Uploading with biliup..."
           UPLOAD_SUCCESS=0
-          if ( cd "${RUN_DIR}" && "${BILIUP_CMD}" upload -c biliup_config.json ); then
+          if ( cd "${RUN_DIR}" && "${BILIUP_CMD}" -u "${SCRIPT_DIR}/cookies.json" upload -c biliup_config.yaml ); then
             UPLOAD_SUCCESS=1
           fi
 
@@ -365,7 +365,7 @@ if [ -n "${SOURCE_MP3}" ] && [ -f "${SOURCE_MP3}" ]; then
           echo "[workflow] Cannot upload: biliup command not found." >&2
         fi
       else
-        echo "[workflow] Cannot upload: biliup_config.json not found in ${RUN_DIR}." >&2
+        echo "[workflow] Cannot upload: biliup_config.yaml not found in ${RUN_DIR}." >&2
       fi
     fi
   fi

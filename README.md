@@ -21,7 +21,7 @@ The pipeline is unified under a single bash script (`run_workflow.sh`) which sea
 
 ```text
 1. Prompt & Config ──> 2. LangGraph Script Generation ──> ./scripts/[timestamp]/script.txt
-   (Planner Agent)     (Supervisor + Worker Agents)       ./scripts/[timestamp]/biliup_config.json
+   (Planner Agent)     (Supervisor + Worker Agents)       ./scripts/[timestamp]/biliup_config.yaml
                                                                 │
 ┌───────────────────────────────────────────────────────────────┘
 │
@@ -146,7 +146,7 @@ Inside, you will find:
 - `merged.mp4` (Final Video)
 - `merged.mp3` (Final Audio)
 - `script.txt` (Full generated script)
-- `biliup_config.json` (Dynamic Biliup metadata)
+- `biliup_config.yaml` (Dynamic Biliup metadata)
 - `cover.jpg` (Thumbnail used)
 
 ### Troubleshooting
