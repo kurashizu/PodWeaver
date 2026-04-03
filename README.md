@@ -1,66 +1,59 @@
-# LangGraph Supervisor System for Podcast Script Generation
+# PodWeaver: Autonomous AI Podcast Pipeline
 
 ## 📋 Overview
 
-This system uses LangGraph to implement a reliable multi-agent architecture for automatically generating podcast scripts. It is specifically designed to handle situations where local models may have limited performance, slow output, or potential interruptions.
+**PodWeaver** is an end-to-end automated pipeline for creating AI-hosted podcasts. It utilizes LangGraph to orchestrate a reliable multi-agent architecture for script generation, processes the script into high-quality Text-to-Speech (TTS) audio, renders it into a video, and automatically uploads the final product to Bilibili using Biliup.
 
-### Core Features
+Specially designed to run smoothly on local LLMs, it handles interruptions, features automatic retry mechanisms, and manages the entire lifecycle of content creation from a simple text prompt to a published video.
 
-✅ **Supervisor-Worker Architecture**: A supervisor agent coordinates multiple worker agents.
-✅ **Automatic Retry Mechanism**: Handles local model interruptions by automatically retrying failed chapters.
-✅ **State Persistence**: Uses LangGraph checkpointer to save progress.
-✅ **Dynamic Chapter Generation**: Automatically plans and structures the podcast chapters based on user topics.
-✅ **Modular Design**: Each chapter is generated independently; a failure in one does not affect the others.
-✅ **Resumable Execution**: Can continue execution after a Ctrl+C interruption.
+### ✨ Core Features
 
-## 🏗️ Architecture Design
+✅ **Multi-Agent Architecture**: A Supervisor agent coordinates multiple Worker agents for chapter-by-chapter script generation.
+✅ **Dynamic Chapter Planning**: Automatically structures podcast chapters based on your topic.
+✅ **Resilient Execution**: Saves progress via LangGraph checkpointer and automatically retries failed chapters.
+✅ **Automated TTS & Video Rendering**: Converts scripts to speech, merges clips, and renders an MP4 using FFmpeg (with VAAPI hardware acceleration support).
+✅ **One-Click Publishing**: Automatically generates metadata (including title and description extracted by AI) and uploads the finished video to Bilibili via `biliup`.
+✅ **Self-Cleaning**: Optionally cleans up temporary files and caches after a successful upload to save disk space.
 
+## 🏗️ Architecture & Workflow
+
+The pipeline is unified under a single bash script (`run_workflow.sh`) which seamlessly connects the following stages:
+
+```text
+1. Prompt & Config ──> 2. LangGraph Script Generation ──> ./scripts/[timestamp]/script.txt
+   (Planner Agent)     (Supervisor + Worker Agents)       ./scripts/[timestamp]/biliup_config.json
+                                                                │
+┌───────────────────────────────────────────────────────────────┘
+│
+▼
+3. Split Segments ──> 4. Batch TTS ──> 5. Audio Merge ──> 6. Video Render (FFmpeg)
+(Sentence chunks)     (TTS engine)     (Combined MP3)     (Combined MP4 with Cover)
+                                                                │
+┌───────────────────────────────────────────────────────────────┘
+│
+▼
+7. Auto Upload (Biliup) ──> 8. Cleanup (--delete)
 ```
-┌─────────────────────────────────────────────────┐
-│          Supervisor Agent                       │
-│  - Task Assignment                              │
-│  - Progress Monitoring                          │
-│  - Retry Strategy                               │
-│  - Final Script Assembly                        │
-└────────┬────────────────────────────────────────┘
-         │
-         ├─> Worker Agent 1 (Chapter 1)
-         ├─> Worker Agent 2 (Chapter 2)
-         ├─> Worker Agent 3 (Chapter 3)
-         ├─> Worker Agent 4 (Chapter 4)
-         └─> Worker Agent N (Chapter N)
-                    │
-                    ▼
-            Final Output (./scripts/[date_time]/)
-            ├── script.txt
-            └── metadata.json
-```
-
-## 🔄 Workflow
-
-1. **Initialization**: Reads configurations from `config.json` and loads prompts.
-2. **Dynamic Planning**: Uses the user's topic to automatically generate a chapter outline using an LLM.
-3. **Execution Loop**:
-   - The Supervisor selects a PENDING chapter.
-   - A Worker generates the content for that chapter.
-   - If successful → marked as COMPLETED.
-   - If failed → retried (up to a configured maximum).
-   - Returns to Supervisor to assign the next task.
-4. **Finalization**: Once all chapters are completed, the Finalize node assembles and saves the script to `./scripts/[date_time]/script.txt` along with a `metadata.json` for Biliup configuration.
 
 ## 📦 Installation
 
 ```bash
-# 1. Install dependencies
+# 1. Install Python dependencies
+pip install -r requirements.txt
 pip install -r requirements_langgraph.txt
 
-# 2. Configure the system
-# Ensure config.json and prompt files are set up correctly
+# 2. Setup FFmpeg
+# Ensure ffmpeg is installed and available in your system PATH.
+
+# 3. Setup Biliup (for auto-upload)
+# Download the biliup CLI tool and place the executable in the project root.
+# Run `./biliup login` to generate `cookies.json`.
 ```
 
 ## ⚙️ Configuration
 
-The system uses a `config.json` file for configuration, structured as follows:
+### 1. Main Config (`config.json`)
+The system uses `config.json` for model settings, prompt paths, and Bilibili upload metadata:
 
 ```json
 {
@@ -71,123 +64,101 @@ The system uses a `config.json` file for configuration, structured as follows:
         "max_tokens": 8000
     },
     "podcast": {
-        "user_prompt_file": "./user_prompt.txt",
-        "planner_prompt_file": "./planner_prompt.txt",
-        "supervisor_prompt_file": "./supervisor_prompt.txt",
-        "worker_prompt_file": "./worker_prompt.txt"
+        "user_prompt_file": "./prompts/user_prompt.txt",
+        "planner_prompt_file": "./prompts/planner_prompt.txt",
+        "supervisor_prompt_file": "./prompts/supervisor_prompt.txt",
+        "worker_prompt_file": "./prompts/worker_prompt.txt"
+    },
+    "biliup_config_default": {
+        "line": "kodo",
+        "limit": 3,
+        "streamers": {
+            "视频patterns1*": {
+                "copyright": 1,
+                "source": "转载来源",
+                "tid": 171,
+                "cover": "",
+                "title": "标题",
+                "desc_format_id": 0,
+                "desc": "简介",
+                "open_subtitle": false
+            }
+        }
     }
 }
 ```
 
-### Prompt Files
-
+### 2. Prompt Files (`./prompts/`)
 - `user_prompt.txt`: Contains the main topic and instructions for the podcast.
-- `planner_prompt.txt`: The system prompt instructing the LLM on how to generate the dynamic chapter outline.
+- `planner_prompt.txt`: Instructs the LLM on how to generate the dynamic chapter outline and video description.
 - `supervisor_prompt.txt`: The system prompt instructing the Supervisor agent.
 - `worker_prompt.txt`: The system prompt instructing the Worker agents.
 
-### Supported Local Model Services
-
-- **LM Studio**: `http://localhost:1234/v1`
-- **Ollama** (with OpenAI compatibility): `http://localhost:11434/v1`
-- **vLLM**: `http://localhost:8000/v1`
-- **text-generation-webui**: `http://localhost:5000/v1`
-
 ## 🚀 Usage
 
-### Basic Execution
+The entire pipeline is heavily automated. Just define your topic in `prompts/user_prompt.txt`, place a `cover.jpg` in the root folder, and run the workflow.
 
+### Run Full Automated Pipeline
 ```bash
-python3 generate_script.py
+./run_workflow.sh
+```
+*This generates the script, synthesizes audio, creates the video, and automatically uploads to Bilibili (keeping local output files).*
+
+### Run Locally Without Uploading
+```bash
+./run_workflow.sh --no-upload
 ```
 
-### Handling Interruptions
-
-If the program is interrupted (e.g., via Ctrl+C):
-
+### Fire and Forget (Upload & Delete Local Cache)
 ```bash
-# State is automatically saved.
-# Failed or pending chapters will resume upon restarting.
-python3 generate_script.py
+./run_workflow.sh --delete
+```
+*Uploads the final video and cleans up all temporary directories (`clips/`, `segments/`, and `output/[timestamp]/`) upon success to save disk space.*
+
+### Handling Interruptions & Resuming
+If the workflow is interrupted (e.g., via `Ctrl+C`), progress is automatically check-pointed.
+```bash
+./run_workflow.sh --resume
+```
+*This skips successfully completed steps.*
+
+### Advanced Workflow Arguments
+```bash
+Usage: ./run_workflow.sh [options]
+
+Options:
+  --voice <voice>         Voice shortname (default: zh-CN-XiaoxiaoNeural)
+  --out-dir <dir>         Output base directory (default: output)
+  --resume                Skip steps already marked completed in .workflow_state/
+  --only-video            Only run video creation
+  --merged-path <path>    Use this MP3 as the merged input for the video step
+  --vaapi-device <dev>    VAAPI device to use (default: /dev/dri/renderD128)
+  --upload                Upload video using biliup after creation (default: true)
+  --no-upload             Do not upload the video
+  --delete                Delete output files after successful upload (default: false)
 ```
 
 ## 🔍 Monitoring and Debugging
 
-### Output Indicators
+### Output Folders
+All final generated artifacts are collected in timestamped directories under `output/` (e.g., `output/20231027_153000/`).
+Inside, you will find:
+- `merged.mp4` (Final Video)
+- `merged.mp3` (Final Audio)
+- `script.txt` (Full generated script)
+- `biliup_config.json` (Dynamic Biliup metadata)
+- `cover.jpg` (Thumbnail used)
 
-- `✓` Success
-- `✗` Error
-- `!` Warning / Retry
-- `→` Progress Indicator
+### Troubleshooting
 
-### Chapter Statuses
+**1. LLM Connection Refused:**
+Ensure your local model service is running and `base_url` in `config.json` is correct.
 
-- `PENDING`: Waiting to be processed.
-- `IN_PROGRESS`: Currently being generated.
-- `COMPLETED`: Successfully finished.
-- `FAILED`: Failed (exceeded maximum retry limit).
+**2. Biliup Upload Fails:**
+Ensure you've executed `./biliup login` and that `cookies.json` is valid and present in the project root.
 
-## 📊 Integration with Existing Workflows
-
-```bash
-# Full Podcast Generation Pipeline
-
-# 1. Generate Script (Using LangGraph)
-python3 generate_script.py
-
-# 2. Run existing workflow (TTS + Video Generation)
-./run_workflow.sh
-
-# Or run step-by-step:
-# python3 split_segments.py      # Split script
-# python3 tts_batch.py            # Text-to-Speech
-# python3 merge_clips.py          # Merge audio
-# (run_workflow.sh generates the final video)
-```
-
-## 🔧 Troubleshooting
-
-### Issue 1: Failed to connect to local model
-
-```
-Error: Connection refused
-```
-
-**Solution**:
-- Ensure your local model service is running.
-- Verify `base_url` in `config.json`.
-- Test connection: `curl http://localhost:11435/v1/models`
-
-### Issue 2: Generated content is too short
-
-```
-Generated content too short (45 chars), likely model failure
-```
-
-**Solution**:
-- The local model might lack performance or context length.
-- Increase `max_tokens`.
-- Lower `temperature`.
-- Try a more capable model.
-
-### Issue 3: Content style is incorrect
-
-**Solution**:
-- Adjust the prompts in `worker_prompt.txt`.
-- Modify the `temperature` parameter (e.g., between 0.7-1.0).
-
-## 📈 Performance Optimization
-
-### For Limited Local Models:
-
-1. **Reduce Target Length**: Ask for fewer words in the user prompt.
-2. **Increase Retries**: Modify `MAX_RETRIES_PER_CHAPTER` in the code.
-3. **Use Quantized Models**: e.g., GGUF Q4_K_M formats.
-
-### For Faster Generation:
-
-1. **Parallel Execution**: (Future feature) Modify code to support multiple concurrent workers.
-2. **Faster Models**: Use models like Llama 3 8B instead of larger variants.
+**3. FFmpeg VAAPI Errors:**
+If hardware acceleration fails, omit or change the `--vaapi-device`. The script will gracefully fallback to software encoding (`libx264`) if VAAPI is unavailable.
 
 ## 📄 License
 
