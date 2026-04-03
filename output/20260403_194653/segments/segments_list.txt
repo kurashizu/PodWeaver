@@ -1,0 +1,15 @@
+segment_01.txt	988
+segment_02.txt	988
+segment_03.txt	993
+segment_04.txt	874
+segment_05.txt	1000
+segment_06.txt	986
+segment_07.txt	983
+segment_08.txt	962
+segment_09.txt	1001
+segment_10.txt	993
+segment_11.txt	991
+segment_12.txt	981
+segment_13.txt	964
+segment_14.txt	999
+segment_15.txt	357

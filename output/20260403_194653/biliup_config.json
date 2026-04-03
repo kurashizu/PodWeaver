@@ -1,0 +1,23 @@
+{
+    "line": "kodo",
+    "limit": 3,
+    "streamers": {
+        "视频patterns1*": {
+            "copyright": 1,
+            "source": "转载来源",
+            "tid": 171,
+            "cover": "./cover.jpg",
+            "title": "Git 终极指南：让你的代码管理告别混乱",
+            "desc_format_id": 0,
+            "desc": "睡前故事",
+            "dynamic": "",
+            "subtitle": {
+                "open": 0,
+                "lan": ""
+            },
+            "tag": "",
+            "dtime": null,
+            "open_subtitle": false
+        }
+    }
+}

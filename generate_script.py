@@ -294,6 +294,8 @@ def finalize_node(state: AgentState) -> AgentState:
                 biliup_config["streamers"][pattern]["title"] = SCRIPT_CONFIG.get(
                     "topic", biliup_config["streamers"][pattern].get("title", "")
                 )
+                if "desc" in SCRIPT_CONFIG:
+                    biliup_config["streamers"][pattern]["desc"] = SCRIPT_CONFIG["desc"]
         biliup_config_path = output_path.parent / "biliup_config.json"
         biliup_config_path.write_text(
             json.dumps(biliup_config, ensure_ascii=False, indent=4), encoding="utf-8"
@@ -458,6 +460,8 @@ def generate_dynamic_chapters():
         result = json.loads(content)
         if isinstance(result, dict) and "chapters" in result and "topic" in result:
             SCRIPT_CONFIG["topic"] = result["topic"]
+            if "desc" in result:
+                SCRIPT_CONFIG["desc"] = result["desc"]
             CHAPTERS.clear()
             CHAPTERS.extend(result["chapters"])
             print(
