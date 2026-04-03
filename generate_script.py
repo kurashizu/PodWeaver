@@ -290,12 +290,16 @@ def finalize_node(state: AgentState) -> AgentState:
         biliup_config = copy.deepcopy(SCRIPT_CONFIG.get("biliup", {}))
 
         if "streamers" in biliup_config:
+            new_streamers = {}
             for pattern in biliup_config["streamers"]:
-                biliup_config["streamers"][pattern]["title"] = SCRIPT_CONFIG.get(
-                    "topic", biliup_config["streamers"][pattern].get("title", "")
+                streamer_config = biliup_config["streamers"][pattern]
+                streamer_config["title"] = SCRIPT_CONFIG.get(
+                    "topic", streamer_config.get("title", "")
                 )
                 if "desc" in SCRIPT_CONFIG:
-                    biliup_config["streamers"][pattern]["desc"] = SCRIPT_CONFIG["desc"]
+                    streamer_config["desc"] = SCRIPT_CONFIG["desc"]
+                new_streamers["merged.mp4"] = streamer_config
+            biliup_config["streamers"] = new_streamers
         biliup_config_path = output_path.parent / "biliup_config.json"
         biliup_config_path.write_text(
             json.dumps(biliup_config, ensure_ascii=False, indent=4), encoding="utf-8"

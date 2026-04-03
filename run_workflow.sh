@@ -41,6 +41,8 @@ OVERWRITE_FLAG=""
 RESUME=0
 ONLY_VIDEO=0
 MERGED_PATH_OVERRIDE=""
+UPLOAD=1
+DELETE=0
 
 STATE_DIR=".workflow_state"
 mkdir -p "${STATE_DIR}"
@@ -59,6 +61,9 @@ Options:
   --reencode              Pass --reencode to merge_clips.py
   --overwrite             Pass --overwrite to tts_batch.py
   --vaapi-device <dev>    VAAPI device to use (default: ${VAAPI_DEVICE})
+  --upload                Upload video using biliup after creation (default: true, use --no-upload to disable)
+  --no-upload             Do not upload the video
+  --delete                Delete output files after successful upload (default: false)
   -h, --help              Show this help
 EOF
 }
@@ -100,6 +105,9 @@ while [ $# -gt 0 ]; do
     --reencode) REENCODE=1; shift;;
     --overwrite) OVERWRITE_FLAG="--overwrite"; shift;;
     --vaapi-device) VAAPI_DEVICE="$2"; shift 2;;
+    --upload) UPLOAD=1; shift;;
+    --no-upload) UPLOAD=0; shift;;
+    --delete) DELETE=1; shift;;
     -h|--help) print_help; exit 0;;
     *) echo "Unknown arg: $1"; print_help; exit 2;;
   esac
@@ -115,6 +123,8 @@ echo "[workflow] Output base dir: ${OUT_BASE}"
 echo "[workflow] Resume: $([ "${RESUME}" -eq 1 ] && echo 'ON' || echo 'OFF')"
 echo "[workflow] Only video: $([ "${ONLY_VIDEO}" -eq 1 ] && echo 'ON' || echo 'OFF')"
 echo "[workflow] VAAPI device: ${VAAPI_DEVICE}"
+echo "[workflow] Upload: $([ "${UPLOAD}" -eq 1 ] && echo 'ON' || echo 'OFF')"
+echo "[workflow] Delete after upload: $([ "${DELETE}" -eq 1 ] && echo 'ON' || echo 'OFF')"
 echo
 
 # Step names
@@ -323,6 +333,41 @@ if [ -n "${SOURCE_MP3}" ] && [ -f "${SOURCE_MP3}" ]; then
   else
     echo "[workflow] Video created: ${VIDEO_OUT}"
     mark_done "${STEP_VIDEO}"
+
+    if [ "${UPLOAD}" -eq 1 ]; then
+      echo "[workflow] Step: upload (biliup)"
+      if [ -f "${RUN_DIR}/biliup_config.json" ]; then
+        if [ -x "${SCRIPT_DIR}/biliup" ]; then
+          BILIUP_CMD="${SCRIPT_DIR}/biliup"
+        elif check_cmd biliup; then
+          BILIUP_CMD="biliup"
+        else
+          BILIUP_CMD=""
+        fi
+
+        if [ -n "${BILIUP_CMD}" ]; then
+          echo "[workflow] Uploading with biliup..."
+          UPLOAD_SUCCESS=0
+          if ( cd "${RUN_DIR}" && "${BILIUP_CMD}" upload -c biliup_config.json ); then
+            UPLOAD_SUCCESS=1
+          fi
+
+          if [ "${UPLOAD_SUCCESS}" -eq 1 ]; then
+            echo "[workflow] Upload successful."
+            if [ "${DELETE}" -eq 1 ]; then
+              echo "[workflow] Deleting run directory ${RUN_DIR} due to --delete flag..."
+              rm -rf "${RUN_DIR}"
+            fi
+          else
+            echo "[workflow] biliup upload failed." >&2
+          fi
+        else
+          echo "[workflow] Cannot upload: biliup command not found." >&2
+        fi
+      else
+        echo "[workflow] Cannot upload: biliup_config.json not found in ${RUN_DIR}." >&2
+      fi
+    fi
   fi
 else
   echo "[workflow] No source MP3 available for video step; skipping." >&2
@@ -349,9 +394,13 @@ else
 fi
 
 echo
-echo "[workflow] Completed. Run folder: ${RUN_DIR}"
-if [ -f "${VIDEO_OUT:-}" ]; then
-  echo "[workflow] Video: ${VIDEO_OUT}"
+if [ "${UPLOAD}" -eq 1 ] && [ "${DELETE}" -eq 1 ] && [ "${UPLOAD_SUCCESS:-0}" -eq 1 ]; then
+  echo "[workflow] Completed. Run folder ${RUN_DIR} was deleted after upload."
+else
+  echo "[workflow] Completed. Run folder: ${RUN_DIR}"
+  if [ -f "${VIDEO_OUT:-}" ]; then
+    echo "[workflow] Video: ${VIDEO_OUT}"
+  fi
 fi
 echo "[workflow] State markers are in ${STATE_DIR}/ (remove them to force re-run of steps)."
 exit 0
