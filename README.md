@@ -20,8 +20,8 @@ Specially designed to run smoothly on local LLMs, it handles interruptions, feat
 The pipeline is unified under a single bash script (`run_workflow.sh`) which seamlessly connects the following stages:
 
 ```text
-1. Prompt & Config ──> 2. LangGraph Script Generation ──> ./scripts/[timestamp]/script.txt
-   (Planner Agent)     (Supervisor + Worker Agents)       ./scripts/[timestamp]/biliup_config.yaml
+1. Prompt & Config ──> 2. LangGraph Script Generation ──> ./workspace/scripts/[timestamp]/script.txt
+   (Planner Agent)     (Supervisor + Worker Agents)       ./workspace/scripts/[timestamp]/biliup_config.yaml
                                                                 │
 ┌───────────────────────────────────────────────────────────────┘
 │
@@ -52,8 +52,8 @@ pip install -r requirements_langgraph.txt
 
 ## ⚙️ Configuration
 
-### 1. Main Config (`config.json`)
-The system uses `config.json` for model settings, prompt paths, and Bilibili upload metadata:
+### 1. Main Config (`conf/config.json`)
+The system uses `conf/config.json` for model settings, prompt paths, and Bilibili upload metadata:
 
 ```json
 {
@@ -64,10 +64,11 @@ The system uses `config.json` for model settings, prompt paths, and Bilibili upl
         "max_tokens": 8000
     },
     "podcast": {
-        "user_prompt_file": "./prompts/user_prompt.txt",
-        "planner_prompt_file": "./prompts/planner_prompt.txt",
-        "supervisor_prompt_file": "./prompts/supervisor_prompt.txt",
-        "worker_prompt_file": "./prompts/worker_prompt.txt"
+        "user_prompt_file": "./conf/prompts/user_prompt.txt",
+        "planner_prompt_file": "./conf/prompts/planner_prompt.txt",
+        "supervisor_prompt_file": "./conf/prompts/supervisor_prompt.txt",
+        "worker_prompt_file": "./conf/prompts/worker_prompt.txt",
+        "user_prompt_queue_file": "./conf/prompts/user_prompt_queue.json"
     },
     "biliup_config_default": {
         "line": "kodo",
@@ -88,15 +89,16 @@ The system uses `config.json` for model settings, prompt paths, and Bilibili upl
 }
 ```
 
-### 2. Prompt Files (`./prompts/`)
+### 2. Prompt Files (`./conf/prompts/`)
 - `user_prompt.txt`: Contains the main topic and instructions for the podcast.
+- `user_prompt_queue.json`: A JSON array of topics for batch processing.
 - `planner_prompt.txt`: Instructs the LLM on how to generate the dynamic chapter outline and video description.
 - `supervisor_prompt.txt`: The system prompt instructing the Supervisor agent.
 - `worker_prompt.txt`: The system prompt instructing the Worker agents.
 
 ## 🚀 Usage
 
-The entire pipeline is heavily automated. Just define your topic in `prompts/user_prompt.txt`, place a `cover.jpg` in the root folder, and run the workflow.
+The entire pipeline is heavily automated. Just define your topic in `conf/prompts/user_prompt.txt` (or use the queue file `user_prompt_queue.json`), place a `cover.jpg` in the `assets/` folder, and run the workflow.
 
 ### Run Full Automated Pipeline
 ```bash
@@ -113,7 +115,7 @@ The entire pipeline is heavily automated. Just define your topic in `prompts/use
 ```bash
 ./run_workflow.sh --delete
 ```
-*Uploads the final video and cleans up all temporary directories (`clips/`, `segments/`, and `output/[timestamp]/`) upon success to save disk space.*
+*Uploads the final video and cleans up all temporary directories (`workspace/clips/`, `workspace/segments/`, and `workspace/output/[timestamp]/`) upon success to save disk space.*
 
 ### Handling Interruptions & Resuming
 If the workflow is interrupted (e.g., via `Ctrl+C`), progress is automatically check-pointed.
@@ -128,7 +130,7 @@ Usage: ./run_workflow.sh [options]
 
 Options:
   --voice <voice>         Voice shortname (default: zh-CN-XiaoxiaoNeural)
-  --out-dir <dir>         Output base directory (default: output)
+  --out-dir <dir>         Output base directory (default: workspace/output)
   --resume                Skip steps already marked completed in .workflow_state/
   --only-video            Only run video creation
   --merged-path <path>    Use this MP3 as the merged input for the video step
@@ -136,12 +138,13 @@ Options:
   --upload                Upload video using biliup after creation (default: true)
   --no-upload             Do not upload the video
   --delete                Delete output files after successful upload (default: false)
+  --queue                 Run prompts from queue file sequentially
 ```
 
 ## 🔍 Monitoring and Debugging
 
 ### Output Folders
-All final generated artifacts are collected in timestamped directories under `output/` (e.g., `output/20231027_153000/`).
+All final generated artifacts are collected in timestamped directories under `workspace/output/` (e.g., `workspace/output/20231027_153000/`).
 Inside, you will find:
 - `merged.mp4` (Final Video)
 - `merged.mp3` (Final Audio)
@@ -152,7 +155,7 @@ Inside, you will find:
 ### Troubleshooting
 
 **1. LLM Connection Refused:**
-Ensure your local model service is running and `base_url` in `config.json` is correct.
+Ensure your local model service is running and `base_url` in `conf/config.json` is correct.
 
 **2. Biliup Upload Fails:**
 Ensure you've executed `./biliup login` and that `cookies.json` is valid and present in the project root.

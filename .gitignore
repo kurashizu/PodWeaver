@@ -24,13 +24,9 @@ wheels/
 
 # LangGraph and project state
 .langgraph_checkpoints/
-.workflow_state/
 
-# Output directories
-output/
-scripts/
-clips/
-segments/
+# Workspace directory (contains outputs, temporary files, states)
+workspace/
 
 # Media and logs
 *.mp3
@@ -52,5 +48,5 @@ cookies.json
 ehthumbs.db
 Thumbs.db
 
-# Personal notes and configs
-utility_scripts/
+# Personal
+init.sh

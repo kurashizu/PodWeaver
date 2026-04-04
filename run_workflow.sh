@@ -19,20 +19,15 @@ if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
   exit 1
 fi
 
-# Check if the 'rich' library is installed, which is required for the UI
-if ! "${PYTHON_BIN}" -c "import rich" 2>/dev/null; then
-  echo "Error: The 'rich' Python library is required for the UI." >&2
-  echo "Please install it by running: ${PYTHON_BIN} -m pip install rich" >&2
-  exit 1
-fi
+
 
 # Pass all incoming arguments to the Python runner
-exec "${PYTHON_BIN}" workflow_runner.py "$@"
+exec "${PYTHON_BIN}" src/workflow_runner.py "$@"
 
 # --- LEGACY BASH SCRIPT BELOW (IGNORED DUE TO EXEC ABOVE) ---
 
 # Resumable pipeline runner with improved output layout:
-#   All outputs for a run are placed in: ./output/<YYYYMMDD_HHMMSS>/
+#   All outputs for a run are placed in: ./workspace/output/<YYYYMMDD_HHMMSS>/
 #     - merged.mp3
 #     - merged.mp4
 #     - script.txt  (copied from project root if exists)
@@ -48,8 +43,8 @@ exec "${PYTHON_BIN}" workflow_runner.py "$@"
 # Usage examples:
 #   ./run_workflow.sh
 #   ./run_workflow.sh --resume
-#   ./run_workflow.sh --only-video --merged-path output/20260101_123456/merged.mp3
-#   ./run_workflow.sh --out-dir output --voice zh-CN-XiaoxiaoNeural
+#   ./run_workflow.sh --only-video --merged-path workspace/output/20260101_123456/merged.mp3
+#   ./run_workflow.sh --out-dir workspace/output --voice zh-CN-XiaoxiaoNeural
 #
 set -euo pipefail
 
@@ -58,7 +53,7 @@ VOICE="zh-CN-XiaoxiaoNeural"
 SEGMENT_DIR="segments"
 CLIPS_DIR="clips"
 CLIPS_MERGED_REL="${CLIPS_DIR}/merged.mp3"
-OUT_BASE="output"
+OUT_BASE="workspace/output"
 DO_CLEAN=1
 REENCODE=0
 PYTHON_BIN="${PYTHON_BIN:-python3}"
