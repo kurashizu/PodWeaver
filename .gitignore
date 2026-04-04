@@ -50,3 +50,5 @@ Thumbs.db
 
 # Personal
 init.sh
+docs/
+.gitignore

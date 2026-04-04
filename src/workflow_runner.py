@@ -178,7 +178,7 @@ class WorkflowRunner:
         steps.append({"id": "video", "name": "Render Video"})
 
         if self.args.upload:
-            steps.append({"id": "upload", "name": "Biliup Upload"})
+            steps.append({"id": "upload", "name": "Browser Upload"})
 
         if self.args.clean and not self.args.only_video:
             steps.append({"id": "clean", "name": "Cache Cleanup"})
@@ -480,72 +480,40 @@ class WorkflowRunner:
                             success = True
 
                     elif step_id == "upload":
-                        progress.update(
-                            step_task, total=None
-                        )  # Indeterminate for upload
-                        if (current_run_dir / "biliup_config.yaml").exists():
-                            biliup_bin = (
-                                str(Path("./biliup").resolve())
-                                if Path("./biliup").exists()
-                                else "biliup"
-                            )
-                            cookies_path = str(Path("cookies.json").resolve())
-                            cmd = [
-                                biliup_bin,
-                                "-u",
-                                cookies_path,
-                                "upload",
-                                "-c",
-                                "biliup_config.yaml",
-                            ]
+                        progress.update(step_task, total=None)  # Indeterminate
+                        yaml_path = current_run_dir / "biliup_config.yaml"
+                        video_path = current_run_dir / "merged.mp4"
+                        cover_path = current_run_dir / "cover.jpg"
 
-                            max_wait = 24 * 3600  # 24 hours maximum total wait
-                            total_waited = 0
-                            retry_delay = 180  # Start with 3 minutes
-                            attempt = 1
-
-                            while True:
-                                code, out = self.run_cmd_live(
-                                    cmd,
-                                    step_id,
-                                    progress,
-                                    step_task,
-                                    log_queue,
-                                    live_display,
-                                    cwd=str(current_run_dir),
-                                )
-                                output_log = out
-                                if code == 0:
-                                    success = True
-                                    upload_success = True
-                                    break
-
-                                if total_waited + retry_delay <= max_wait:
-                                    msg = f"[WARN] Upload failed. Rate limited? Retrying in {retry_delay}s... (Attempt {attempt}, Waited {total_waited}s)"
-                                    log_queue.append(msg)
-                                    live_display.update(
-                                        Group(
-                                            progress,
-                                            Panel(
-                                                "\n".join(log_queue),
-                                                title="Live Logs",
-                                                border_style="blue",
-                                            ),
-                                        )
-                                    )
-                                    time.sleep(retry_delay)
-                                    total_waited += retry_delay
-                                    retry_delay = min(
-                                        retry_delay * 2, 3600
-                                    )  # Cap delay at 1 hour
-                                    attempt += 1
-                                else:
-                                    success = False
-                                    upload_success = False
-                                    break
-                        else:
+                        if not yaml_path.exists():
                             success = False
                             output_log = "Error: biliup_config.yaml not found."
+                        elif not video_path.exists():
+                            success = False
+                            output_log = "Error: merged.mp4 not found in run dir."
+                        else:
+                            cmd = [
+                                self.python_bin,
+                                "src/upload_video.py",
+                                "--video",
+                                str(video_path),
+                                "--cover",
+                                str(cover_path),
+                                "--yaml",
+                                str(yaml_path),
+                            ]
+                            code, out = self.run_cmd_live(
+                                cmd,
+                                step_id,
+                                progress,
+                                step_task,
+                                log_queue,
+                                live_display,
+                            )
+                            output_log = out
+                            if code == 0:
+                                success = True
+                                upload_success = True
 
                     elif step_id == "clean":
                         progress.update(step_task, total=1)

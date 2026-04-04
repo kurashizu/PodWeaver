@@ -34,5 +34,15 @@
                 "open_subtitle": false
             }
         }
+    },
+    "playwright": {
+        "headless": true,
+        "remote_debugging_port": 9222,
+        "remote_debugging_address": "0.0.0.0",
+        "window_width": 1280,
+        "window_height": 720,
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "upload_url": "https://member.bilibili.com/platform/upload/video/frame",
+        "timeout": 120000
     }
 }
