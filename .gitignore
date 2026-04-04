@@ -51,3 +51,6 @@ cookies.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Personal notes and configs
+utility_scripts/
