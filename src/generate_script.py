@@ -18,6 +18,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+
+# Add project root to sys.path so 'src' module can be found
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -31,8 +35,8 @@ from langgraph.graph.message import add_messages
 
 # 本地模型配置 (使用OpenAI-compatible API)
 LOCAL_MODEL_CONFIG = {
-    "base_url": "http://localhost:11435/v1",  # Ollama OpenAI兼容端点
-    "api_key": "ollama",  # Ollama需要一个非空的api_key
+    "base_url": "http://localhost:11435/v1",  # OpenAI兼容端点
+    "api_key": "openai",  # 需要一个非空的api_key
     "model": "gemma4:e4b-it-q8_0",  # 本地可用的模型
     "temperature": 0.7,
     "max_tokens": 4000,
@@ -226,7 +230,7 @@ def worker_node(state: AgentState) -> AgentState:
         llm = create_llm()
         messages = [
             SystemMessage(content=worker_prompt),
-            HumanMessage(content="请开始创作这个章节的内容。"),
+            HumanMessage(content=WORKER_HUMAN_PROMPT),
         ]
 
         print(f"Calling LLM for chapter: {chapter_id}...")
@@ -385,59 +389,73 @@ def init_config():
         LOCAL_MODEL_CONFIG, \
         SCRIPT_CONFIG, \
         PLANNER_SYSTEM_PROMPT, \
+        PLANNER_HUMAN_PROMPT, \
         SUPERVISOR_SYSTEM_PROMPT, \
-        WORKER_SYSTEM_PROMPT
+        WORKER_SYSTEM_PROMPT, \
+        WORKER_HUMAN_PROMPT
 
-    config_path = Path("conf/config.json")
-    if not config_path.exists():
-        raise FileNotFoundError("conf/config.json not found")
+    from src.config import CONFIG, get_prompt_path
 
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
+    if "biliup_config_default" in CONFIG:
+        SCRIPT_CONFIG["biliup"] = CONFIG["biliup_config_default"]
 
-        if "biliup_config_default" in config:
-            SCRIPT_CONFIG["biliup"] = config["biliup_config_default"]
+    if "openai" in CONFIG:
+        LOCAL_MODEL_CONFIG.update(CONFIG["openai"])
+        if "api_key" not in LOCAL_MODEL_CONFIG:
+            LOCAL_MODEL_CONFIG["api_key"] = "openai"
 
-        if "ollama" in config:
-            LOCAL_MODEL_CONFIG.update(config["ollama"])
-            if "api_key" not in LOCAL_MODEL_CONFIG:
-                LOCAL_MODEL_CONFIG["api_key"] = "ollama"
+    user_prompt = get_prompt_path("user_prompt_file", "conf/prompts/user_prompt.txt")
+    planner_prompt = get_prompt_path(
+        "planner_prompt_file", "conf/prompts/planner_prompt.txt"
+    )
+    planner_human = get_prompt_path(
+        "planner_human_file", "conf/prompts/planner_human.txt"
+    )
+    supervisor_prompt = get_prompt_path(
+        "supervisor_prompt_file", "conf/prompts/supervisor_prompt.txt"
+    )
+    worker_prompt = get_prompt_path(
+        "worker_prompt_file", "conf/prompts/worker_prompt.txt"
+    )
+    worker_human = get_prompt_path("worker_human_file", "conf/prompts/worker_human.txt")
 
-        if "podcast" in config:
-            user_prompt = config["podcast"].get("user_prompt_file")
-            planner_prompt = config["podcast"].get("planner_prompt_file")
-            supervisor_prompt = config["podcast"].get("supervisor_prompt_file")
-            worker_prompt = config["podcast"].get("worker_prompt_file")
+    if user_prompt.exists():
+        with open(user_prompt, "r", encoding="utf-8") as pf:
+            SCRIPT_CONFIG["topic"] = pf.read().strip()
+    else:
+        raise FileNotFoundError(f"user_prompt_file not found: {user_prompt}")
 
-            if user_prompt and Path(user_prompt).exists():
-                with open(user_prompt, "r", encoding="utf-8") as pf:
-                    SCRIPT_CONFIG["topic"] = pf.read().strip()
-            else:
-                raise FileNotFoundError(f"user_prompt_file not found: {user_prompt}")
+    if planner_prompt.exists():
+        with open(planner_prompt, "r", encoding="utf-8") as pf:
+            PLANNER_SYSTEM_PROMPT = pf.read().strip()
+    else:
+        raise FileNotFoundError(f"planner_prompt_file not found: {planner_prompt}")
 
-            if planner_prompt and Path(planner_prompt).exists():
-                with open(planner_prompt, "r", encoding="utf-8") as pf:
-                    PLANNER_SYSTEM_PROMPT = pf.read().strip()
-            else:
-                raise FileNotFoundError(
-                    f"planner_prompt_file not found: {planner_prompt}"
-                )
+    if planner_human.exists():
+        with open(planner_human, "r", encoding="utf-8") as pf:
+            PLANNER_HUMAN_PROMPT = pf.read().strip()
+    else:
+        raise FileNotFoundError(f"planner_human_file not found: {planner_human}")
 
-            if supervisor_prompt and Path(supervisor_prompt).exists():
-                with open(supervisor_prompt, "r", encoding="utf-8") as pf:
-                    SUPERVISOR_SYSTEM_PROMPT = pf.read().strip()
-            else:
-                raise FileNotFoundError(
-                    f"supervisor_prompt_file not found: {supervisor_prompt}"
-                )
+    if supervisor_prompt.exists():
+        with open(supervisor_prompt, "r", encoding="utf-8") as pf:
+            SUPERVISOR_SYSTEM_PROMPT = pf.read().strip()
+    else:
+        raise FileNotFoundError(
+            f"supervisor_prompt_file not found: {supervisor_prompt}"
+        )
 
-            if worker_prompt and Path(worker_prompt).exists():
-                with open(worker_prompt, "r", encoding="utf-8") as pf:
-                    WORKER_SYSTEM_PROMPT = pf.read().strip()
-            else:
-                raise FileNotFoundError(
-                    f"worker_prompt_file not found: {worker_prompt}"
-                )
+    if worker_prompt.exists():
+        with open(worker_prompt, "r", encoding="utf-8") as pf:
+            WORKER_SYSTEM_PROMPT = pf.read().strip()
+    else:
+        raise FileNotFoundError(f"worker_prompt_file not found: {worker_prompt}")
+
+    if worker_human.exists():
+        with open(worker_human, "r", encoding="utf-8") as pf:
+            WORKER_HUMAN_PROMPT = pf.read().strip()
+    else:
+        raise FileNotFoundError(f"worker_human_file not found: {worker_human}")
 
 
 def generate_dynamic_chapters():
@@ -448,9 +466,10 @@ def generate_dynamic_chapters():
 
     llm = create_llm()
 
+    human_prompt = PLANNER_HUMAN_PROMPT.format(topic=SCRIPT_CONFIG["topic"])
     messages = [
         SystemMessage(content=PLANNER_SYSTEM_PROMPT),
-        HumanMessage(content=f"主题描述：\n{SCRIPT_CONFIG['topic']}\n请规划播客章节。"),
+        HumanMessage(content=human_prompt),
     ]
 
     try:
@@ -484,8 +503,10 @@ def main():
     init_config()
     generate_dynamic_chapters()
 
+    from src.config import SCRIPTS_DIR
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    SCRIPT_CONFIG["output_file"] = f"./workspace/scripts/{timestamp}/script.txt"
+    SCRIPT_CONFIG["output_file"] = str(SCRIPTS_DIR / timestamp / "script.txt")
 
     print("=" * 60)
     print("LangGraph Supervisor System for Podcast Script Generation")

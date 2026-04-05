@@ -1,15 +1,17 @@
 {
-    "ollama": {
+    "openai": {
         "base_url": "http://localhost:11435/v1",
         "model": "gemma4:e4b-it-q8_0",
         "temperature": 0.7,
         "max_tokens": 8000
     },
-    "podcast": {
+    "prompt": {
         "user_prompt_file": "./conf/prompts/user_prompt.txt",
         "planner_prompt_file": "./conf/prompts/planner_prompt.txt",
+        "planner_human_file": "./conf/prompts/planner_human.txt",
         "supervisor_prompt_file": "./conf/prompts/supervisor_prompt.txt",
         "worker_prompt_file": "./conf/prompts/worker_prompt.txt",
+        "worker_human_file": "./conf/prompts/worker_human.txt",
         "user_prompt_queue_file": "./conf/prompts/user_prompt_queue.json"
     },
     "biliup_config_default": {

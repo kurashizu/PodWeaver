@@ -20,7 +20,12 @@ import asyncio
 import base64
 import json
 import os
+import sys
 from pathlib import Path
+
+# Add project root to sys.path so 'src' module can be found
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from typing import Optional, TypedDict
 
 import yaml
@@ -598,12 +603,17 @@ def _ok_fill_desc_unused():
 
 
 def load_config() -> dict:
-    with open("conf/config.json", "r", encoding="utf-8") as f:
-        return json.load(f)
+    from src.config import CONFIG
+
+    return CONFIG
 
 
 def parse_cookies(path: str = "cookies.json") -> list:
+    from src.config import PROJECT_ROOT
+
     p = Path(path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
     if not p.exists():
         return []
     data = json.loads(p.read_text())
@@ -639,12 +649,12 @@ async def main():
 
     cfg = load_config()
     pw_cfg = cfg.get("playwright", {})
-    llm_cfg = cfg.get("ollama", {})
+    llm_cfg = cfg.get("openai", {})
 
     global _llm
     _llm = ChatOpenAI(
         base_url=llm_cfg.get("base_url", "http://localhost:11435/v1"),
-        api_key=llm_cfg.get("api_key", "ollama"),
+        api_key=llm_cfg.get("api_key", "openai"),
         model=llm_cfg.get("model", "gemma4:e4b-it-q8_0"),
         temperature=0,
     )

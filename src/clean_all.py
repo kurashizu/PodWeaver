@@ -28,6 +28,9 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
+# Add project root to sys.path so 'src' module can be found
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 
 def confirm(prompt: str) -> bool:
     try:
@@ -119,20 +122,22 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Show what would be deleted without performing deletions",
     )
+    from src.config import CLIPS_DIR, SCRIPTS_DIR, SEGMENTS_DIR
+
     parser.add_argument(
         "--clips-dir",
-        default="workspace/clips",
-        help="Clips directory name relative to the script (default: workspace/clips)",
+        default=str(CLIPS_DIR),
+        help=f"Clips directory name (default: {CLIPS_DIR})",
     )
     parser.add_argument(
         "--segments-dir",
-        default="workspace/segments",
-        help="Segments directory name relative to the script (default: workspace/segments)",
+        default=str(SEGMENTS_DIR),
+        help=f"Segments directory name (default: {SEGMENTS_DIR})",
     )
     parser.add_argument(
         "--scripts-dir",
-        default="workspace/scripts",
-        help="Scripts directory name relative to the script (default: workspace/scripts)",
+        default=str(SCRIPTS_DIR),
+        help=f"Scripts directory name (default: {SCRIPTS_DIR})",
     )
     args = parser.parse_args(argv)
 

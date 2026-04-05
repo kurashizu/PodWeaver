@@ -13,6 +13,9 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
+# Add project root to sys.path so 'src' module can be found
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 try:
     from rich.console import Console, Group
     from rich.live import Live
@@ -34,9 +37,11 @@ console = Console()
 
 class WorkflowRunner:
     def __init__(self, args):
+        from src.config import WORKSPACE_DIR
+
         self.args = args
         self.python_bin = args.python_bin
-        self.state_dir = Path("workspace/.workflow_state")
+        self.state_dir = WORKSPACE_DIR / ".workflow_state"
 
     def run_cmd_live(
         self, cmd, step_id, progress, task_id, log_queue, live_display, cwd=None
@@ -116,7 +121,9 @@ class WorkflowRunner:
         return process.returncode, "".join(output_log)
 
     def get_latest_script_dir(self):
-        scripts_dir = Path("workspace/scripts")
+        from src.config import SCRIPTS_DIR
+
+        scripts_dir = SCRIPTS_DIR
         if not scripts_dir.exists():
             return None
         dirs = [d for d in scripts_dir.iterdir() if d.is_dir()]
@@ -136,29 +143,35 @@ class WorkflowRunner:
         return mp3s[0]
 
     def execute_pipeline(self, prompt_idx=1, total_prompts=1, prompt_text=None):
+        from src.config import (
+            CLIPS_DIR,
+            SEGMENTS_DIR,
+            SRC_DIR,
+            WORKSPACE_DIR,
+            get_asset_path,
+        )
+
         run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         # If running in queue mode, inject the current prompt into the designated file
         if prompt_text:
-            try:
-                with open("conf/config.json", "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                prompt_file = config.get("podcast", {}).get(
-                    "user_prompt_file", "./conf/prompts/user_prompt.txt"
-                )
-            except Exception:
-                prompt_file = "./conf/prompts/user_prompt.txt"
+            from src.config import get_prompt_path
 
-            Path(prompt_file).parent.mkdir(parents=True, exist_ok=True)
+            prompt_file = get_prompt_path(
+                "user_prompt_file", "conf/prompts/user_prompt.txt"
+            )
+
+            prompt_file.parent.mkdir(parents=True, exist_ok=True)
             with open(prompt_file, "w", encoding="utf-8") as f:
                 f.write(prompt_text)
 
             # Each queue item is independent, so clear previous state markers and outputs
             if self.state_dir.exists():
                 shutil.rmtree(self.state_dir)
-            if Path("src/clean_all.py").exists():
+            if (SRC_DIR / "clean_all.py").exists():
                 subprocess.run(
-                    [self.python_bin, "src/clean_all.py", "--yes"], capture_output=True
+                    [self.python_bin, str(SRC_DIR / "clean_all.py"), "--yes"],
+                    capture_output=True,
                 )
 
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -251,17 +264,17 @@ class WorkflowRunner:
                     elif step_id == "split":
                         progress.update(step_task, total=1)
                         latest_dir = self.get_latest_script_dir()
-                        script_input = "script.txt"
+                        script_input = str(WORKSPACE_DIR / "script.txt")
                         if latest_dir and (latest_dir / "script.txt").exists():
                             script_input = str(latest_dir / "script.txt")
                         code, out = self.run_cmd_live(
                             [
                                 self.python_bin,
-                                "src/split_segments.py",
+                                str(SRC_DIR / "split_segments.py"),
                                 "--input",
                                 script_input,
                                 "--outdir",
-                                "workspace/segments",
+                                str(SEGMENTS_DIR),
                             ],
                             step_id,
                             progress,
@@ -274,11 +287,11 @@ class WorkflowRunner:
                             success = True
 
                     elif step_id == "tts":
-                        Path("workspace/clips").mkdir(parents=True, exist_ok=True)
+                        CLIPS_DIR.mkdir(parents=True, exist_ok=True)
 
                         # Pre-calculate total segments for accurate TTS progress
                         tts_total = 0
-                        seg_dir = Path("workspace/segments")
+                        seg_dir = SEGMENTS_DIR
                         if seg_dir.exists():
                             tts_total = len(list(seg_dir.glob("*.txt")))
 
@@ -287,11 +300,11 @@ class WorkflowRunner:
 
                         cmd = [
                             self.python_bin,
-                            "src/tts_batch.py",
+                            str(SRC_DIR / "tts_batch.py"),
                             "--segment-dir",
-                            "workspace/segments",
+                            str(SEGMENTS_DIR),
                             "--out-dir",
-                            "workspace/clips",
+                            str(CLIPS_DIR),
                             "--voice",
                             self.args.voice,
                         ]
@@ -309,11 +322,11 @@ class WorkflowRunner:
                         progress.update(step_task, total=1)
                         cmd = [
                             self.python_bin,
-                            "src/merge_clips.py",
+                            str(SRC_DIR / "merge_clips.py"),
                             "--input-dir",
-                            "workspace/clips",
+                            str(CLIPS_DIR),
                             "--output",
-                            "workspace/clips/merged.mp3",
+                            str(CLIPS_DIR / "merged.mp3"),
                         ]
                         if self.args.reencode:
                             cmd.append("--reencode")
@@ -337,9 +350,9 @@ class WorkflowRunner:
                                 self.args.merged_path, current_run_dir / "merged.mp3"
                             )
                             source_mp3 = current_run_dir / "merged.mp3"
-                        elif Path("workspace/clips/merged.mp3").exists():
+                        elif (CLIPS_DIR / "merged.mp3").exists():
                             shutil.move(
-                                "workspace/clips/merged.mp3",
+                                CLIPS_DIR / "merged.mp3",
                                 current_run_dir / "merged.mp3",
                             )
                             source_mp3 = current_run_dir / "merged.mp3"
@@ -351,21 +364,22 @@ class WorkflowRunner:
 
                         if source_mp3:
                             cached_source_mp3 = source_mp3
-                            if Path("workspace/segments").exists():
+                            if SEGMENTS_DIR.exists():
                                 shutil.copytree(
-                                    "workspace/segments",
+                                    SEGMENTS_DIR,
                                     current_run_dir / "segments",
                                     dirs_exist_ok=True,
                                 )
-                            if Path("workspace/clips").exists():
+                            if CLIPS_DIR.exists():
                                 shutil.copytree(
-                                    "workspace/clips",
+                                    CLIPS_DIR,
                                     current_run_dir / "clips",
                                     dirs_exist_ok=True,
                                 )
-                            if Path("assets/cover.jpg").exists():
+                            if get_asset_path("cover.jpg").exists():
                                 shutil.copy(
-                                    "assets/cover.jpg", current_run_dir / "cover.jpg"
+                                    get_asset_path("cover.jpg"),
+                                    current_run_dir / "cover.jpg",
                                 )
 
                             latest_dir = self.get_latest_script_dir()
@@ -380,9 +394,9 @@ class WorkflowRunner:
                                         latest_dir / "biliup_config.yaml",
                                         current_run_dir / "biliup_config.yaml",
                                     )
-                            elif Path("workspace/script.txt").exists():
+                            elif (WORKSPACE_DIR / "script.txt").exists():
                                 shutil.copy(
-                                    "workspace/script.txt",
+                                    WORKSPACE_DIR / "script.txt",
                                     current_run_dir / "script.txt",
                                 )
 
@@ -395,8 +409,11 @@ class WorkflowRunner:
                         if cached_source_mp3:
                             video_out = current_run_dir / "merged.mp4"
                             cover = current_run_dir / "cover.jpg"
-                            if not cover.exists() and Path("assets/cover.jpg").exists():
-                                cover = Path("assets/cover.jpg")
+                            if (
+                                not cover.exists()
+                                and get_asset_path("cover.jpg").exists()
+                            ):
+                                cover = get_asset_path("cover.jpg")
 
                             cmd = []
                             if Path(self.args.vaapi_device).exists() and shutil.which(
@@ -494,7 +511,7 @@ class WorkflowRunner:
                         else:
                             cmd = [
                                 self.python_bin,
-                                "src/upload_video.py",
+                                str(SRC_DIR / "upload_video.py"),
                                 "--video",
                                 str(video_path),
                                 "--cover",
@@ -517,9 +534,13 @@ class WorkflowRunner:
 
                     elif step_id == "clean":
                         progress.update(step_task, total=1)
-                        if Path("src/clean_all.py").exists():
+                        if (SRC_DIR / "clean_all.py").exists():
                             code, out = self.run_cmd_live(
-                                [self.python_bin, "src/clean_all.py", "--yes"],
+                                [
+                                    self.python_bin,
+                                    str(SRC_DIR / "clean_all.py"),
+                                    "--yes",
+                                ],
                                 step_id,
                                 progress,
                                 step_task,
@@ -577,8 +598,10 @@ def main():
     parser.add_argument(
         "--voice", default="zh-CN-XiaoxiaoNeural", help="Voice shortname"
     )
+    from src.config import OUTPUT_DIR
+
     parser.add_argument(
-        "--out-dir", default="workspace/output", help="Output base directory"
+        "--out-dir", default=str(OUTPUT_DIR), help="Output base directory"
     )
     parser.add_argument(
         "--resume", action="store_true", help="Resume from last failed step"
@@ -632,11 +655,11 @@ def main():
     runner = WorkflowRunner(args)
 
     if args.queue:
+        from src.config import get_prompt_path
+
         try:
-            with open("conf/config.json", "r", encoding="utf-8") as f:
-                config = json.load(f)
-            queue_file = config.get("podcast", {}).get(
-                "user_prompt_queue_file", "./conf/prompts/user_prompt_queue.json"
+            queue_file = get_prompt_path(
+                "user_prompt_queue_file", "conf/prompts/user_prompt_queue.json"
             )
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
